@@ -5,11 +5,16 @@ pipeline {
         IMAGE = "sreemanthenaclouddevops/devops-e2e-local:latest"
     }
 
+    options {
+    skipDefaultCheckout(true)
+    }
+
     stages {
 
         stage('Checkout') {
             steps {
-                git 'https://github.com/DevOps-Local-Labs/devops-e2e-local.git'
+                git branch: 'feature/devops-e2e-local',
+                    url: 'https://github.com/DevOps-Local-Labs/devops-e2e-local.git'
             }
         }
 
