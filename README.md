@@ -130,7 +130,7 @@ pipeline {
         stage('Checkout') {
             steps {
                 git branch: 'feature/devops-e2e-local',
-                    url: 'https://github.com/DevOps-Local-Labs/devops-e2e-local.git'
+                    url: 'https://github.com/<YOUR_REPO>.git'
             }
         }
 
