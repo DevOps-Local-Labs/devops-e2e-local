@@ -142,10 +142,15 @@ pipeline {
 
         stage('Push Docker Image') {
             steps {
-                withCredentials([usernamePassword(credentialsId: 'docker-creds', usernameVariable: 'USER', passwordVariable: 'PASS')]) {
+                withCredentials([usernamePassword(
+                  credentialsId: 'docker-creds',
+                  usernameVariable: 'USER',
+                  passwordVariable: 'PASS'
+                )]) {
                     sh '''
-                    echo $PASS | docker login -u $USER --password-stdin
+                    echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
                     docker push $IMAGE
+                    docker logout
                     '''
                 }
             }
@@ -154,6 +159,7 @@ pipeline {
         stage('Deploy to Kubernetes') {
             steps {
                 sh '''
+                export KUBECONFIG=/var/lib/jenkins/.kube/config
                 kubectl apply -f deployment.yml
                 kubectl apply -f service.yml
                 '''
