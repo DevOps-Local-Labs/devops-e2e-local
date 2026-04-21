@@ -209,6 +209,7 @@ kubectl get svc
 
 ```
 http://<VM-IP>:30007
+root@devops-vm:/home/vagrant# kubectl port-forward --address 0.0.0.0 pod/devops-e2e-local-6445c4f88c-mbz7w 5000:5000
 ```
 
 Example:
