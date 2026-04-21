@@ -8,10 +8,18 @@ spec:
   - host: devops.local
     http:
       paths:
-      - path: /
+      - path: /app1
         pathType: Prefix
         backend:
           service:
             name: devops-service
+            port:
+              number: 80
+
+      - path: /app2
+        pathType: Prefix
+        backend:
+          service:
+            name: app2-service
             port:
               number: 80
