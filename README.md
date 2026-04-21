@@ -1,98 +1,48 @@
-# 🚀 DevOps End-to-End Project (FULLY AUTOMATED – Jenkins + Docker + Kubernetes)
+# 🚀 Kubernetes Ingress Setup (Kind + NGINX Ingress)
 
-## 📌 Architecture
+## 📌 Goal
 
-GitHub → Jenkins → Docker Build → Docker Push → Kubernetes Deploy → Access via NodePort
+Access application using clean URL:
 
----
+http://devops.local
 
-## 📌 Step 1: Repository Structure (GitHub)
+Instead of:
 
-```
-repo/
- ├── app/
- │   ├── app.py
- │   └── requirements.txt
- ├── Dockerfile
- ├── deployment.yml
- ├── service.yml
- └── Jenkinsfile
-```
+http://IP:PORT
 
 ---
 
-## 📌 Step 2: Application Code
+## 📌 Prerequisites
 
-### app/app.py
+- Kubernetes cluster (Kind)
+- Application already deployed
+- Service created (ClusterIP)
 
-```python
-from flask import Flask
-app = Flask(__name__)
+---
 
-@app.route("/")
-def home():
-    return "DevOps End-to-End Demo 🚀"
+## 📌 Step 1: Install NGINX Ingress Controller
 
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
-```
-
-### app/requirements.txt
-
-```
-flask==2.3.2
+```bash
+kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml
 ```
 
 ---
 
-## 📌 Step 3: Dockerfile
+## 📌 Step 2: Verify Ingress Controller
 
-```dockerfile
-FROM python:3.10-slim
+```bash
+kubectl get pods -n ingress-nginx
+```
 
-WORKDIR /app
+Expected:
 
-COPY app/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-COPY app/ .
-
-EXPOSE 5000
-
-CMD ["python3", "app.py"]
+```
+ingress-nginx-controller   Running
 ```
 
 ---
 
-## 📌 Step 4: Kubernetes Deployment
-
-### deployment.yml
-
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: devops-e2e-local
-spec:
-  replicas: 2
-  selector:
-    matchLabels:
-      app: devops-app
-  template:
-    metadata:
-      labels:
-        app: devops-app
-    spec:
-      containers:
-        - name: devops-container
-          image: <your-dockerhub-username>/devsecops-demo:latest
-          ports:
-            - containerPort: 5000
-```
-
----
-
-### service.yml
+## 📌 Step 3: Ensure Service is ClusterIP
 
 ```yaml
 apiVersion: v1
@@ -100,162 +50,134 @@ kind: Service
 metadata:
   name: devops-service
 spec:
-  type: NodePort
+  type: ClusterIP
   selector:
-    app: devops-app
+    app: devops-e2e-local
   ports:
     - port: 80
       targetPort: 5000
-      nodePort: 30007
 ```
 
----
-
-## 📌 Step 5: Jenkinsfile (FULL AUTOMATION)
-
-```groovy
-pipeline {
-    agent any
-
-    environment {
-        IMAGE = "<your-dockerhub-username>/devsecops-demo:latest"
-    }
-
-    options {
-        skipDefaultCheckout(true)
-    }
-
-    stages {
-
-        stage('Checkout') {
-            steps {
-                git branch: 'feature/devops-e2e-local',
-                    url: 'https://github.com/<YOUR_REPO>.git'
-            }
-        }
-
-        stage('Build Docker Image') {
-            steps {
-                sh 'docker build -t $IMAGE .'
-            }
-        }
-
-        stage('Push Docker Image') {
-            steps {
-                withCredentials([usernamePassword(
-                  credentialsId: 'docker-creds',
-                  usernameVariable: 'USER',
-                  passwordVariable: 'PASS'
-                )]) {
-                    sh '''
-                    echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
-                    docker push $IMAGE
-                    docker logout
-                    '''
-                }
-            }
-        }
-
-        stage('Deploy to Kubernetes') {
-            steps {
-                sh '''
-                export KUBECONFIG=/var/lib/jenkins/.kube/config
-                kubectl apply -f deployment.yml
-                kubectl apply -f service.yml
-                '''
-            }
-        }
-    }
-}
-```
-
----
-
-## 📌 Step 6: One-Time Setup (ONLY ONCE)
-
-### Give Jenkins access to Kubernetes
+Apply:
 
 ```bash
-sudo mkdir -p /var/lib/jenkins/.kube
-sudo cp /root/.kube/config /var/lib/jenkins/.kube/config
-sudo chown -R jenkins:jenkins /var/lib/jenkins/.kube
+kubectl apply -f service.yml
 ```
 
 ---
 
-## 📌 Step 7: Trigger Pipeline
+## 📌 Step 4: Create Ingress Resource
 
-👉 Run Jenkins Job
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: devops-ingress
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: devops.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: devops-service
+                port:
+                  number: 80
+```
 
-Pipeline will:
-
-✔ Pull code  
-✔ Build Docker image  
-✔ Push to DockerHub  
-✔ Deploy to Kubernetes
-
----
-
-## 📌 Step 8: Verify Deployment
+Apply:
 
 ```bash
-kubectl get pods
-kubectl get svc
+kubectl apply -f ingress.yml
 ```
 
 ---
 
-## 📌 Step 9: Access Application (FINAL)
+## 📌 Step 5: Verify Ingress
 
-```
-http://<VM-IP>:30007
-root@devops-vm:/home/vagrant# kubectl port-forward --address 0.0.0.0 pod/devops-e2e-local-6445c4f88c-mbz7w 5000:5000
+```bash
+kubectl get ingress
+kubectl describe ingress devops-ingress
 ```
 
-Example:
+Expected:
 
-```
-http://192.168.56.51:30007
+- CLASS: nginx
+- Host: devops.local
+- Backend: devops-service
+
+---
+
+## 📌 Step 6: Expose Ingress (Kind Environment)
+
+Run port-forward:
+
+```bash
+kubectl port-forward -n ingress-nginx svc/ingress-nginx-controller 80:80 --address 0.0.0.0
 ```
 
 ---
 
-## 🎯 FINAL FLOW
+## 📌 Step 7: Configure Local DNS (Windows)
+
+Edit hosts file:
 
 ```
-Code Push → Jenkins Trigger → Build → Push → Deploy → Access App
+C:\Windows\System32\drivers\etc\hosts
+```
+
+Add:
+
+```
+192.168.56.51 devops.local
 ```
 
 ---
 
-## 💡 Key DevOps Concepts Covered
+## 📌 Step 8: Access Application
 
-- CI/CD Pipeline
-- Docker Build & Push
-- Kubernetes Deployment
-- Service Exposure (NodePort)
-- Automation (No manual steps)
+Open browser:
+
+```
+http://devops.local
+```
 
 ---
 
-## 🎓 Trainer Note
+## 🎯 Final Architecture
 
-Explain clearly:
+```
+Browser → devops.local → Ingress → Service → Pod
+```
 
-| Stage    | What Happens               |
-| -------- | -------------------------- |
-| Checkout | Pulls code                 |
-| Build    | Creates Docker image       |
-| Push     | Uploads image              |
-| Deploy   | Updates Kubernetes         |
-| Access   | App available via NodePort |
+---
+
+## 💡 Key Concepts
+
+- Ingress provides HTTP routing
+- No need for NodePort
+- Uses domain-based access
+- Requires Ingress Controller (NGINX)
+
+---
+
+## ⚠️ Notes
+
+- In Kind, Ingress requires port-forward (or port mapping)
+- Always specify:
+
+  ingressClassName: nginx
+
+- Without ingressClassName → routing will not work
 
 ---
 
 ## 🚀 Outcome
 
-Students will understand:
-
-✔ End-to-End DevOps flow  
-✔ Real CI/CD pipeline  
-✔ Production-like deployment
+✔ Clean URL access  
+✔ Production-style routing  
+✔ No ports exposed  
+✔ Real DevOps architecture
