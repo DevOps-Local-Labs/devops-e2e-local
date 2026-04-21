@@ -3,14 +3,12 @@ kind: Service
 metadata:
   name: devops-service
 spec:
-  type: NodePort
+  type: ClusterIP
   selector:
     app: devops-e2e-local
   ports:
     - port: 80
       targetPort: 5000
-      nodePort: 30007
-
 
 # apiVersion: v1
 # kind: Service
